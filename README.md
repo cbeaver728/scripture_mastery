@@ -38,13 +38,25 @@ listed in full on the results screen.
 
 ## The verse bank
 
-332 verses, chosen for being doctrinally significant, famous, or worth carrying
-around: 74 Old Testament, 106 New Testament, 92 Book of Mormon, 45 Doctrine and
-Covenants, 15 Pearl of Great Price. 298 are attributed to one of 44 speakers, and
-608 phrases are marked as blankable — roughly 1,570 distinct question stems before
-the randomized decoys multiply them further.
+578 verses, chosen for being doctrinally significant, famous, or worth carrying
+around: 130 Old Testament, 185 New Testament, 157 Book of Mormon, 75 Doctrine and
+Covenants, 31 Pearl of Great Price. 527 are attributed to one of 65 speakers, and
+1,058 phrases are marked as blankable.
+
+That yields **2,741 distinct question stems** — 527 "who said it", 578 each way
+between verse and reference, and 1,058 blanks — before the randomized decoys
+multiply them further.
 
 Text is from the King James Bible and the Restoration scriptures, all public domain.
+
+### How often questions repeat
+
+Every stem you have been served is remembered in `localStorage` and is not shown
+again until the bank is spent, so the app works through it rather than re-rolling
+each session. At 20 questions a day that is roughly **four and a half months**
+before the first repeat on the default setting. Narrowing the focus or difficulty
+narrows the pool — a Master-difficulty run over all the standard works draws from
+2,741 stems, an all-Alma run from 208.
 
 ### Adding verses
 

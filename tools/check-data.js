@@ -28,6 +28,16 @@ all.forEach((v) => {
   });
 });
 
+/* Two verses with identical text would give a "which reference is this?"
+   question two right answers, so they must never both be in the bank. */
+const norm = (s) => s.toLowerCase().replace(/[^a-z ]+/g, '').replace(/\s+/g, ' ').trim();
+const byText = new Map();
+all.forEach((v) => {
+  const k = norm(v.t);
+  if (byText.has(k)) problems.push(`${v.r}: identical text to ${byText.get(k)}`);
+  else byText.set(k, v.r);
+});
+
 const byWork = {};
 all.forEach((v) => { byWork[v.w] = (byWork[v.w] || 0) + 1; });
 

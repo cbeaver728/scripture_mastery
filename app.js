@@ -133,6 +133,11 @@ var prefs = {
 };
 var stats = { answered: 0, correct: 0, best: 0 };
 
+/* Question stems already served, kept across sessions so the bank rotates
+   instead of re-rolling from scratch every quiz. Cleared once it is spent. */
+var seen = {};
+var seenDirty = 0;
+
 var game = null;   // active quiz
 var q = null;      // active question
 var locked = false;
@@ -144,10 +149,16 @@ function load() {
     if (p) for (var k in p) if (k in prefs) prefs[k] = p[k];
     var s = JSON.parse(localStorage.getItem('sm.stats') || 'null');
     if (s) for (var j in s) if (j in stats) stats[j] = s[j];
+    var k = localStorage.getItem('sm.seen');
+    if (k) k.split('\n').forEach(function (key) { if (key) seen[key] = 1; });
   } catch (e) { /* private mode, fresh start */ }
 }
 function savePrefs() { try { localStorage.setItem('sm.prefs', JSON.stringify(prefs)); } catch (e) {} }
 function saveStats() { try { localStorage.setItem('sm.stats', JSON.stringify(stats)); } catch (e) {} }
+function saveSeen() {
+  seenDirty = 0;
+  try { localStorage.setItem('sm.seen', Object.keys(seen).join('\n')); } catch (e) {}
+}
 
 /* ============================== audio ============================== */
 var actx = null;
@@ -408,12 +419,13 @@ function nextQuestion() {
     var built = BUILDERS[type](pool, diff, all);
     if (!built) continue;
     if (built.verse.r === game.lastRef && attempt < 12) continue;
-    if (game.seen[built.key] && attempt < 30) continue;
-    game.seen[built.key] = 1;
+    if (seen[built.key]) continue;
+    seen[built.key] = 1;
+    if (++seenDirty >= 8) saveSeen();
     game.lastRef = built.verse.r;
     return built;
   }
-  game.seen = {};                                  // bank exhausted — start it over
+  seen = {}; saveSeen();                           // bank spent — start a new pass
   for (var pass = 0; pass < 6; pass++) {
     for (var i = 0; i < types.length; i++) {
       var b = BUILDERS[types[i]](pool, diff, all);
@@ -493,7 +505,7 @@ function startQuiz() {
   game = {
     pool: pool, all: all, types: types,
     total: prefs.len, n: 0, correct: 0, streak: 0, best: 0,
-    seen: {}, lastRef: null, missed: []
+    lastRef: null, missed: []
   };
   show('screen-quiz');
   $('#score-of').textContent = prefs.len ? '/ ' + prefs.len : '';
@@ -535,7 +547,7 @@ function paintHud() {
   $('#progress-fill').style.width = Math.min(100, pct) + '%';
 }
 
-function answer(dir) {
+function answer(dir, speed) {
   if (locked || !q) return;
   locked = true;
   var el = ansEls[dir];
@@ -550,12 +562,14 @@ function answer(dir) {
     if (game.streak > game.best) game.best = game.streak;
     if (game.streak > stats.best) stats.best = game.streak;
     el.classList.add('is-right');
+    /* No pause: the card keeps going the way it was thrown, and the check
+       pops in the arena behind it rather than riding away on the card. */
     stamp('good', '✓');
     soundGood(game.streak);
     buzz(14);
     paintHud();
     saveStats();
-    setTimeout(function () { tossOut(dir, advance); }, 430);
+    tossOut(dir, speed, false, advance);
   } else {
     game.streak = 0;
     game.missed.push(q);
@@ -572,8 +586,8 @@ function answer(dir) {
     $('#hint').textContent = q.verse.r + (q.verse.s ? ' · ' + q.verse.s : '');
     paintHud();
     saveStats();
-    setTimeout(function () { stampEl.className = 'stamp'; }, 950);   // let them read the answer
-    setTimeout(function () { tossOut('down', advance); }, 2200);
+    setTimeout(function () { stampEl.className = 'stamp fade'; }, 900);  // let them read the answer
+    setTimeout(function () { tossOut('down', 0, true, advance); }, 2200);
   }
 }
 
@@ -587,36 +601,69 @@ function stamp(kind, glyph) {
   stampEl.innerHTML = '<i>' + glyph + '</i>';
 }
 
-/* --------------------------- card motion --------------------------- */
+/* --------------------------- card motion ---------------------------
+   The card's position is tracked so an exit can continue from wherever the
+   finger let go, at the speed it was moving. Anything else reads as a stall. */
+var pos = { x: 0, y: 0, rot: 0 };
+var rafId = 0;
+
+function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+
 function setT(x, y, rot, op) {
-  card.style.transform = 'translate(' + x + 'px,' + y + 'px) rotate(' + rot + 'deg)';
+  pos.x = x; pos.y = y; pos.rot = rot;
+  card.style.transform = 'translate3d(' + x + 'px,' + y + 'px,0) rotate(' + rot + 'deg)';
   if (op !== undefined) card.style.opacity = op;
 }
+/* Coalesce pointermove into one paint per frame. */
+function setTFrame(x, y, rot) {
+  if (rafId) return;
+  rafId = requestAnimationFrame(function () { rafId = 0; setT(x, y, rot); });
+}
 function settle() {
-  card.classList.remove('is-dragging', 'is-leaving');
+  if (rafId) { cancelAnimationFrame(rafId); rafId = 0; }
+  card.classList.remove('is-dragging');
   card.classList.add('is-settling');
   card.style.transition = '';
   setT(0, 0, 0, 1);
 }
-function tossOut(dir, cb) {
+
+/* speed is px/ms at release; `soft` is the gentle drop used after a miss. */
+function tossOut(dir, speed, soft, cb) {
+  if (rafId) { cancelAnimationFrame(rafId); rafId = 0; }
   card.classList.remove('is-dragging', 'is-settling');
-  card.classList.add('is-leaving');
-  card.style.transition = '';
+
   var w = window.innerWidth, h = window.innerHeight;
-  if (dir === 'left') setT(-w * 1.1, 70, -20, 0);
-  else if (dir === 'right') setT(w * 1.1, 70, 20, 0);
-  else setT(0, h * 1.05, 0, 0);
-  setTimeout(cb, 330);
+  var tx, ty, rot;
+  if (dir === 'left') { tx = -w * 1.25; ty = pos.y + w * 0.12; rot = pos.rot - 16; }
+  else if (dir === 'right') { tx = w * 1.25; ty = pos.y + w * 0.12; rot = pos.rot + 16; }
+  else { tx = pos.x; ty = h * 1.25; rot = pos.rot; }
+
+  /* Taps and arrow keys have no throw velocity. A gentler default keeps them
+     from snapping away faster than a real flick would. */
+  var sp = clamp(speed > 0 ? speed : 1.25, 0.9, 4.5);
+  var dist = Math.hypot(tx - pos.x, ty - pos.y);
+  var dur = soft ? 380 : clamp(dist / (sp * 2), 150, 400);
+
+  /* Ease-out: the throw leaves at speed and only decelerates on the way out.
+     Opacity holds until the card is most of the way gone. */
+  card.style.transition =
+    'transform ' + dur + 'ms ' + (soft ? 'cubic-bezier(.4,0,.7,.4)' : 'cubic-bezier(.22,.61,.36,1)') +
+    ',opacity ' + Math.round(dur * 0.45) + 'ms linear ' + Math.round(dur * 0.5) + 'ms';
+  setT(tx, ty, rot, 0);
+  setTimeout(cb, dur + 20);
 }
+
 function bringIn() {
-  card.classList.remove('is-leaving', 'is-settling', 'is-dragging');
+  if (rafId) { cancelAnimationFrame(rafId); rafId = 0; }
+  card.classList.remove('is-settling', 'is-dragging');
   card.style.transition = 'none';
-  card.style.transform = 'translateY(30px) scale(.965)';
-  card.style.opacity = '0';
+  setT(0, 16, 0, 0);
+  card.style.transform = 'translate3d(0,16px,0) scale(.94)';
   void card.offsetHeight;
-  card.style.transition = 'transform .3s cubic-bezier(.2,.9,.3,1),opacity .26s ease-out';
-  card.style.transform = '';
+  card.style.transition = 'transform .34s cubic-bezier(.2,.95,.35,1),opacity .22s ease-out';
+  card.style.transform = 'translate3d(0,0,0) rotate(0deg)';
   card.style.opacity = '1';
+  pos.x = 0; pos.y = 0; pos.rot = 0;
 }
 
 /* ----------------------------- swiping ----------------------------- */
@@ -637,7 +684,9 @@ function highlight(aim) {
 function onDown(e) {
   if (locked) return;
   if (e.target.closest('.answer')) return;      // taps handled by the buttons
-  drag = { x: e.clientX, y: e.clientY, id: e.pointerId, t: Date.now() };
+  var now = (window.performance || Date).now();
+  drag = { x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, lt: now,
+           vx: 0, vy: 0, id: e.pointerId };
   try { card.setPointerCapture(e.pointerId); } catch (err) { /* synthetic pointers */ }
   card.classList.add('is-dragging');
   card.classList.remove('is-settling');
@@ -645,28 +694,40 @@ function onDown(e) {
 }
 function onMove(e) {
   if (!drag || e.pointerId !== drag.id) return;
+
+  /* Instantaneous velocity, smoothed — the average over the whole drag would
+     report a slow flick when the player pauses before flicking. */
+  var now = (window.performance || Date).now();
+  var dt = Math.max(1, now - drag.lt);
+  drag.vx = 0.7 * ((e.clientX - drag.lx) / dt) + 0.3 * drag.vx;
+  drag.vy = 0.7 * ((e.clientY - drag.ly) / dt) + 0.3 * drag.vy;
+  drag.lx = e.clientX; drag.ly = e.clientY; drag.lt = now;
+
   var dx = e.clientX - drag.x, dy = e.clientY - drag.y;
   if (dy < 0) dy *= 0.32;                        // upward drags resist
-  setT(dx, dy, dx / 22);
+  setTFrame(dx, dy, dx / 22);
   highlight(aimOf(dx, dy));
 }
 function onUp(e) {
   if (!drag || e.pointerId !== drag.id) return;
   var dx = e.clientX - drag.x, dy = e.clientY - drag.y;
-  var dt = Math.max(1, Date.now() - drag.t);
-  var speed = Math.max(Math.abs(dx), Math.abs(dy)) / dt;   // px per ms
+  var speed = Math.hypot(drag.vx, drag.vy);      // px per ms at release
   drag = null;
   card.classList.remove('is-dragging');
   highlight(null);
 
+  if (rafId) { cancelAnimationFrame(rafId); rafId = 0; }
+  setT(dx, dy < 0 ? dy * 0.32 : dy, dx / 22);    // land on the true finger position
+
   var aim = aimOf(dx, dy);
-  var far = Math.max(Math.abs(dx), Math.abs(dy)) > 80 || speed > 0.55;
-  if (aim && far) answer(aim);
+  var far = Math.max(Math.abs(dx), Math.abs(dy)) > 72 || speed > 0.45;
+  if (aim && far) answer(aim, speed);
   else settle();
 }
 
 /* ============================== results ============================== */
 function finish() {
+  saveSeen();
   var pct = game.n ? Math.round(game.correct / game.n * 100) : 0;
   $('#result-ring').style.setProperty('--pct', pct + '%');
   $('#result-pct').textContent = pct + '%';
