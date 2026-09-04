@@ -26,6 +26,11 @@ jobs:
       - name: Check the verse bank before shipping
         run: node tools/check-data.js
 
+      - name: Verify every verse against the published scripture text
+        run: |
+          node tools/fetch-source.js
+          node tools/verify-against-source.js
+
       - name: Stage the static site
         run: |
           mkdir -p _site

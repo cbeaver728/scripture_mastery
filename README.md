@@ -38,33 +38,72 @@ listed in full on the results screen.
 
 ## The verse bank
 
-578 verses, chosen for being doctrinally significant, famous, or worth carrying
-around: 130 Old Testament, 185 New Testament, 157 Book of Mormon, 75 Doctrine and
-Covenants, 31 Pearl of Great Price. 527 are attributed to one of 65 speakers, and
-1,058 phrases are marked as blankable.
+763 verses, chosen for being doctrinally significant, famous, or worth carrying
+around: 191 Old Testament, 258 New Testament, 190 Book of Mormon, 88 Doctrine and
+Covenants, 36 Pearl of Great Price. 680 are attributed to one of 66 speakers, and
+1,350 phrases are marked as blankable.
 
-That yields **2,741 distinct question stems** — 527 "who said it", 578 each way
-between verse and reference, and 1,058 blanks — before the randomized decoys
+That yields **3,556 distinct question stems** — 680 "who said it", 763 each way
+between verse and reference, and 1,350 blanks — before the randomized decoys
 multiply them further.
 
 Text is from the King James Bible and the Restoration scriptures, all public domain.
+
+### Accuracy
+
+Every verse is checked against the published text, and the check runs in CI on
+every deploy, so a wrong quotation cannot ship:
+
+```bash
+node tools/fetch-source.js          # once — downloads the standard works to .source/
+node tools/verify-against-source.js
+```
+
+A bank entry may be the whole verse or a shorter excerpt, but it must be a
+**contiguous** run of words from the real verse. An excerpt that skips words in
+the middle silently rewrites scripture, so the verifier treats it as an error —
+which is how the first audit caught six entries filed under the wrong reference
+and eleven that had been quietly condensed.
+
+Excerpts exist mostly to keep a card honest: `Ruth 1:16` opens "And Ruth said,"
+in the text, which would give away a "who said it" question, so the bank starts
+that verse at "Entreat me not to leave thee."
 
 ### How often questions repeat
 
 Every stem you have been served is remembered in `localStorage` and is not shown
 again until the bank is spent, so the app works through it rather than re-rolling
-each session. At 20 questions a day that is roughly **four and a half months**
-before the first repeat on the default setting. Narrowing the focus or difficulty
-narrows the pool — a Master-difficulty run over all the standard works draws from
-2,741 stems, an all-Alma run from 208.
+each session. At 20 questions a day that is roughly **six months** before the
+first repeat on the default setting. Narrowing the focus or difficulty narrows the
+pool — a Master-difficulty run over all the standard works draws from 3,556 stems,
+an all-Alma run from 245.
 
 ### Adding verses
 
-Append to the right file in `data/`:
+Don't type scripture — curate references and let the text come from the source.
+List what you want in `tools/pending.json`:
+
+```json
+{ "r": "Alma 32:21", "s": "Alma the Younger", "d": 1,
+  "from": "faith is not",
+  "f": ["a perfect knowledge of things"] }
+```
+
+`from` and `to` are optional anchors that trim the entry to a contiguous excerpt
+— use them to drop an opening like "And Ammon said that" which would give away a
+"who said it" answer. `w` and `b` are filled in from the reference, and the blanks
+are matched on words alone and rewritten to the source's exact punctuation, so a
+slightly-off phrase self-corrects rather than failing.
+
+```bash
+node tools/add-verses.js tools/pending.json    # prints entries; paste into data/
+```
+
+Each entry ends up in the right file in `data/` looking like this:
 
 ```js
 {r:"Alma 32:21", w:"bom", b:"Alma", s:"Alma the Younger", d:1,
- t:"And now as I said concerning faith…",
+ t:"Faith is not to have a perfect knowledge of things…",
  f:["a perfect knowledge of things"]}
 ```
 
@@ -78,10 +117,11 @@ Append to the right file in `data/`:
 | `t` | Verse text |
 | `f` | Phrases that can be blanked — each **must** appear verbatim in `t` |
 
-Then run the guard, which is also a build step:
+Then run both guards, which are also build steps:
 
 ```bash
 node tools/check-data.js
+node tools/verify-against-source.js
 ```
 
 ## Running it locally
