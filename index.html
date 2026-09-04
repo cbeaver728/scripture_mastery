@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<title>Scripture Mastery</title>
+<meta name="description" content="Swipe-to-answer scripture quizzes from the Bible, Book of Mormon, Doctrine and Covenants, and Pearl of Great Price.">
+<meta name="theme-color" content="#12162b">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Scripture Mastery">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- ============================ START ============================ -->
+<section id="screen-start" class="screen is-active">
+  <div class="start-scroll">
+    <header class="brand">
+      <div class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 48 48" width="52" height="52"><use href="#glyph-book"></use></svg>
+      </div>
+      <h1>Scripture Mastery</h1>
+      <p class="tagline">Swipe the verse to the right answer.</p>
+    </header>
+
+    <div class="lifetime" id="lifetime" hidden>
+      <div><b id="lt-answered">0</b><span>answered</span></div>
+      <div><b id="lt-accuracy">0%</b><span>accuracy</span></div>
+      <div><b id="lt-streak">0</b><span>best streak</span></div>
+    </div>
+
+    <div class="opt">
+      <h2>Question type</h2>
+      <div class="chips" id="opt-type" role="radiogroup" aria-label="Question type">
+        <button class="chip" role="radio" data-v="mixed">Mixed</button>
+        <button class="chip" role="radio" data-v="who">Who said it?</button>
+        <button class="chip" role="radio" data-v="text2ref">Verse &rarr; Reference</button>
+        <button class="chip" role="radio" data-v="ref2text">Reference &rarr; Verse</button>
+        <button class="chip" role="radio" data-v="blank">Fill in the blank</button>
+      </div>
+    </div>
+
+    <div class="opt">
+      <h2>How many questions</h2>
+      <div class="chips" id="opt-len" role="radiogroup" aria-label="Quiz length">
+        <button class="chip" role="radio" data-v="5">5</button>
+        <button class="chip" role="radio" data-v="10">10</button>
+        <button class="chip" role="radio" data-v="20">20</button>
+        <button class="chip" role="radio" data-v="0">&infin; Infinite</button>
+      </div>
+    </div>
+
+    <div class="opt">
+      <h2>Focus</h2>
+      <div class="select-wrap">
+        <select id="opt-focus" aria-label="Scripture focus"></select>
+      </div>
+      <p class="focus-note" id="focus-note"></p>
+    </div>
+
+    <div class="opt">
+      <h2>Difficulty</h2>
+      <div class="chips" id="opt-diff" role="radiogroup" aria-label="Difficulty">
+        <button class="chip" role="radio" data-v="1">Familiar</button>
+        <button class="chip" role="radio" data-v="2">Steady</button>
+        <button class="chip" role="radio" data-v="3">Master</button>
+      </div>
+      <p class="focus-note" id="diff-note"></p>
+    </div>
+
+    <div class="opt toggles">
+      <label class="toggle"><input type="checkbox" id="opt-sound" checked><span>Sound</span></label>
+      <label class="toggle"><input type="checkbox" id="opt-haptic" checked><span>Vibration</span></label>
+    </div>
+
+    <button class="btn-primary" id="btn-start">Begin</button>
+    <p class="fineprint">Scripture text from the King James Bible and the Restoration scriptures &mdash; all public domain. <span id="bank-count"></span></p>
+  </div>
+</section>
+
+<!-- ============================ QUIZ ============================ -->
+<section id="screen-quiz" class="screen">
+  <header class="hud">
+    <button class="hud-quit" id="btn-quit" aria-label="End quiz">&times;</button>
+    <div class="hud-mid">
+      <p class="prompt" id="prompt">&nbsp;</p>
+      <div class="progress"><i id="progress-fill"></i></div>
+    </div>
+    <div class="hud-score">
+      <b id="score">0</b>
+      <span id="score-of">/ 0</span>
+      <em id="streak" class="streak" hidden>0</em>
+    </div>
+  </header>
+
+  <div class="arena" id="arena">
+    <article class="card" id="card">
+      <div class="card-body">
+        <p class="card-kicker" id="card-kicker"></p>
+        <div class="card-main" id="card-main"></div>
+      </div>
+      <div class="answers">
+        <div class="answer-row">
+          <button class="answer" data-dir="left" id="ans-left"><i class="arrow">&larr;</i><span></span></button>
+          <button class="answer" data-dir="right" id="ans-right"><i class="arrow">&rarr;</i><span></span></button>
+        </div>
+        <button class="answer answer-down" data-dir="down" id="ans-down"><i class="arrow">&darr;</i><span></span></button>
+      </div>
+      <div class="stamp" id="stamp" aria-hidden="true"></div>
+    </article>
+  </div>
+
+  <p class="hint" id="hint">Swipe the card toward your answer &middot; or tap it</p>
+</section>
+
+<!-- ============================ RESULTS ============================ -->
+<section id="screen-done" class="screen">
+  <div class="start-scroll">
+    <div class="result-head">
+      <div class="result-ring" id="result-ring"><span id="result-pct">0%</span></div>
+      <h2 id="result-title">Well done</h2>
+      <p class="result-sub" id="result-sub"></p>
+    </div>
+    <div class="result-stats">
+      <div><b id="r-correct">0</b><span>correct</span></div>
+      <div><b id="r-total">0</b><span>answered</span></div>
+      <div><b id="r-streak">0</b><span>best streak</span></div>
+    </div>
+    <div id="review-wrap" hidden>
+      <h3 class="review-title">Verses to revisit</h3>
+      <ul class="review" id="review"></ul>
+    </div>
+    <button class="btn-primary" id="btn-again">Go again</button>
+    <button class="btn-ghost" id="btn-home">Change settings</button>
+  </div>
+</section>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="glyph-book" viewBox="0 0 48 48">
+    <path d="M24 13c-4-3.2-9-4.6-14.5-4.4A2.5 2.5 0 0 0 7 11.1v22.4a2.5 2.5 0 0 0 2.6 2.5C14.8 35.8 19.6 37 24 40c4.4-3 9.2-4.2 14.4-4a2.5 2.5 0 0 0 2.6-2.5V11.1a2.5 2.5 0 0 0-2.5-2.5C33 8.4 28 9.8 24 13Z" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"/>
+    <path d="M24 13v27" fill="none" stroke="currentColor" stroke-width="2.6"/>
+  </symbol>
+</svg>
+
+<script src="data/verses-ot.js"></script>
+<script src="data/verses-nt.js"></script>
+<script src="data/verses-bom.js"></script>
+<script src="data/verses-dc-pgp.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
