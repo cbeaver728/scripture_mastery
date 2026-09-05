@@ -4,7 +4,8 @@
 const path = require('path');
 
 global.window = {};
-['verses-ot.js', 'verses-nt.js', 'verses-bom.js', 'verses-dc-pgp.js', 'people.js', 'doctrine.js']
+['verses-ot.js', 'verses-nt.js', 'verses-bom.js', 'verses-dc-pgp.js',
+ 'people.js', 'doctrine.js', 'prophets.js']
   .forEach((f) => require(path.join(__dirname, '..', 'data', f)));
 
 const all = [].concat(
@@ -72,6 +73,25 @@ doctrine.forEach((q) => {
   });
 });
 
+/* ---- modern prophets ---- */
+const succession = new Set(window.PROPHETS.map((p) => p.n));
+const orders = new Set();
+window.PROPHETS.forEach((p) => {
+  if (!p.n || !p.y) problems.push(`${p.n || '(unnamed)'}: missing a field`);
+  if (orders.has(p.o)) problems.push(`${p.n}: duplicate order ${p.o}`);
+  orders.add(p.o);
+});
+const saidAlready = new Set();
+window.PROPHET_QUOTES.forEach((q) => {
+  if (!succession.has(q.p)) problems.push(`quote attributed to "${q.p}", who is not in the succession`);
+  if (![1, 2, 3].includes(q.d)) problems.push(`${q.p}: difficulty must be 1-3`);
+  if (!q.q || !q.src) problems.push(`${q.p}: quote or source missing`);
+  /* No citation means no way to check it, and an unverifiable quote does not ship. */
+  if (!q.u) problems.push(`${q.p}: quote has no source url — see tools/verify-quotes.js`);
+  if (saidAlready.has(q.q)) problems.push(`duplicate quote: ${q.q.slice(0, 40)}…`);
+  saidAlready.add(q.q);
+});
+
 const byWork = {};
 all.forEach((v) => { byWork[v.w] = (byWork[v.w] || 0) + 1; });
 
@@ -80,6 +100,7 @@ console.log(`${all.filter((v) => v.s).length} attributed, ${speakers.size} disti
 console.log(`${all.reduce((n, v) => n + (v.f || []).length, 0)} fill-in-the-blank phrases`);
 console.log(`${people.length} people, ${people.reduce((n, p) => n + p.c.length, 0)} clues`);
 console.log(`${doctrine.length} doctrinal questions`);
+console.log(`${window.PROPHETS.length} prophets, ${window.PROPHET_QUOTES.length} verified quotes`);
 
 if (problems.length) {
   console.error(`\n${problems.length} problem(s):`);

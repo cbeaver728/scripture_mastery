@@ -1,6 +1,6 @@
 /* Scripture Mastery — offline shell.
    Bump CACHE on every deploy so returning devices pick up the new build. */
-const CACHE = 'scripture-mastery-v4';
+const CACHE = 'scripture-mastery-v5';
 const ASSETS = [
   './',
   'index.html',
@@ -12,6 +12,7 @@ const ASSETS = [
   'data/verses-dc-pgp.js',
   'data/people.js',
   'data/doctrine.js',
+  'data/prophets.js',
   'manifest.webmanifest',
   'icon.svg',
   'icon-192.png',

@@ -17,8 +17,10 @@ var WORK_NAME = {
 
 var PEOPLE = window.PEOPLE || [];
 var DOCTRINE = window.DOCTRINE || [];
+var PROPHETS = window.PROPHETS || [];
+var PROPHET_QUOTES = window.PROPHET_QUOTES || [];
 
-var ALL_TYPES = ['who', 'whois', 'text2ref', 'ref2text', 'blank', 'doctrine'];
+var ALL_TYPES = ['who', 'whois', 'text2ref', 'ref2text', 'blank', 'doctrine', 'prophet'];
 
 /* Speakers that are genuinely easy to mix up. At Master these are preferred as
    wrong answers, because "Alma the Elder or the Younger?" is the real question. */
@@ -283,10 +285,21 @@ function contextFor(focus, diff) {
   }
   if (!doctrine.length) doctrine = DOCTRINE.filter(function (q) { return BY_REF[q.r]; });
 
-  return { people: people, doctrine: doctrine, byRef: BY_REF };
+  /* Prophet quotes are not scripture, so a book-level focus does not describe
+     them. They come along with the whole bank and the Restoration focuses. */
+  var wide = focus === 'all' || focus === 'c:restoration'
+             || focus === 'w:dc' || focus === 'w:pgp';
+  var quotes = wide ? PROPHET_QUOTES.filter(function (q) { return q.d <= diff; }) : [];
+
+  return { people: people, doctrine: doctrine, quotes: quotes, byRef: BY_REF };
 }
 function widestContext() {
-  return { people: PEOPLE, doctrine: DOCTRINE.filter(function (q) { return BY_REF[q.r]; }), byRef: BY_REF };
+  return {
+    people: PEOPLE,
+    doctrine: DOCTRINE.filter(function (q) { return BY_REF[q.r]; }),
+    quotes: PROPHET_QUOTES,
+    byRef: BY_REF
+  };
 }
 
 /* How many distinct questions the current settings can produce. */
@@ -300,6 +313,7 @@ function availableStems(types, focus, diff) {
     else if (t === 'blank') n += pool.reduce(function (a, v) { return a + v.f.length; }, 0);
     else if (t === 'whois') n += ctx.people.reduce(function (a, p) { return a + p.c.length; }, 0);
     else if (t === 'doctrine') n += ctx.doctrine.length;
+    else if (t === 'prophet') n += ctx.quotes.length;
   });
   return n;
 }
@@ -598,6 +612,51 @@ function qDoctrine(pool, diff, all, ctx) {
   };
 }
 
+/* ---- Modern prophets: a quote; three Presidents of the Church. ---- */
+function qProphet(pool, diff, all, ctx) {
+  var cands = ctx.quotes;
+  if (!cands || cands.length < 1) return null;
+  var q = sample(cands);
+  var me = null;
+  for (var i = 0; i < PROPHETS.length; i++) if (PROPHETS[i].n === q.p) me = PROPHETS[i];
+  if (!me) return null;
+  var near = nearness(diff);
+
+  /* Adjacent Presidents are the hard confusion; a century apart is the easy one.
+     A prophet the quote names ("…that I ever knew Joseph Smith") is excluded —
+     the quote itself rules him out, so offering him is a free elimination. */
+  var others = PROPHETS.filter(function (x) {
+    return x.n !== me.n && q.q.indexOf(x.n) < 0;
+  });
+  var tier;
+  if (near === 'tight') {
+    tier = others.slice().sort(function (a, b) {
+      return Math.abs(a.o - me.o) - Math.abs(b.o - me.o);
+    }).slice(0, 4);
+  } else if (near === 'mid') {
+    tier = others.filter(function (x) { return Math.abs(x.o - me.o) <= 6; });
+    if (tier.length < 2) tier = others;
+  } else {
+    tier = others.filter(function (x) { return Math.abs(x.o - me.o) >= 5; });
+    if (tier.length < 2) tier = others;
+  }
+  var picks = shuffle(tier.slice()).slice(0, 2);
+  if (picks.length < 2) return null;
+
+  return {
+    key: 'proph|' + q.p + '|' + q.q.slice(0, 40),
+    type: 'prophet',
+    verse: { r: q.p + ' · ' + me.y, s: q.src, t: q.q, b: 'Latter-day prophets', w: 'dc' },
+    prompt: 'Which latter-day prophet said it?',
+    kicker: '',
+    main: esc(q.q),
+    size: sizeFor(q.q),
+    correct: q.p,
+    options: [q.p, picks[0].n, picks[1].n],
+    reveal: ''
+  };
+}
+
 function sizeFor(t) {
   var n = t.length;
   if (n < 62) return 'size-xl';
@@ -609,7 +668,7 @@ function sizeFor(t) {
 
 var BUILDERS = {
   who: qWho, whois: qWhoIs, text2ref: qText2Ref,
-  ref2text: qRef2Text, blank: qBlank, doctrine: qDoctrine
+  ref2text: qRef2Text, blank: qBlank, doctrine: qDoctrine, prophet: qProphet
 };
 
 function nextQuestion() {
@@ -709,6 +768,7 @@ function canSupply(t, pool, ctx) {
   if (t === 'blank') return pool.some(function (v) { return v.f.length > 0; });
   if (t === 'whois') return ctx.people.length >= 3;
   if (t === 'doctrine') return ctx.doctrine.length >= 1;
+  if (t === 'prophet') return ctx.quotes.length >= 1;
   return pool.length >= 1;
 }
 
@@ -1032,7 +1092,8 @@ function init() {
   });
   $('#bank-count').textContent =
     VERSES.length + ' verses, ' + PEOPLE.length + ' people, '
-    + DOCTRINE.length + ' doctrinal questions.';
+    + DOCTRINE.length + ' doctrinal questions, '
+    + PROPHET_QUOTES.length + ' prophet quotes.';
   $('#opt-sound').addEventListener('change', function (e) { prefs.sound = e.target.checked; savePrefs(); });
   $('#opt-haptic').addEventListener('change', function (e) { prefs.haptic = e.target.checked; savePrefs(); });
 

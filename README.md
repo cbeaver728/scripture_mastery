@@ -7,7 +7,7 @@ answer you believe is right.
 
 **Play it:** https://cbeaver728.github.io/scripture_mastery/
 
-## The six question types
+## The seven question types
 
 | Type | The card shows | The three targets are |
 | --- | --- | --- |
@@ -17,8 +17,9 @@ answer you believe is right.
 | **Reference → Verse** | A reference | Three verse segments |
 | **Fill in the blank** | A verse with a word or phrase blanked out | Three phrases |
 | **Doctrine Q&A** | A doctrinal question | Three verses, one of which answers it |
+| **Modern prophets** | A quote from a President of the Church | Three Presidents |
 
-Pick any combination — all six, one on its own, or everything except the one you
+Pick any combination — all seven, one on its own, or everything except the one you
 are tired of. The start screen shows how many distinct questions your current
 selection can produce.
 
@@ -53,16 +54,19 @@ around: 191 Old Testament, 259 New Testament, 190 Book of Mormon, 89 Doctrine an
 Covenants, 36 Pearl of Great Price. 682 are attributed to one of 66 speakers, and
 1,353 phrases are marked as blankable.
 
-Two banks sit alongside the verses: **89 people** with 120 descriptive clues in
-`data/people.js`, and **108 doctrinal questions** in `data/doctrine.js`, each
-pointing at the verse that answers it plus the other verses that would also
-fairly answer it (so they are never offered as wrong choices).
+Three banks sit alongside the verses: **89 people** with 120 descriptive clues in
+`data/people.js`; **108 doctrinal questions** in `data/doctrine.js`, each pointing
+at the verse that answers it plus the other verses that would also fairly answer it
+(so they are never offered as wrong choices); and **31 quotes** from Presidents of
+the Church in `data/prophets.js`, spanning Joseph Smith to Dallin H. Oaks.
 
-Altogether that is **3,793 distinct question stems** — 682 "who said it", 120
-"who is it", 765 each way between verse and reference, 1,353 blanks, and 108
-doctrinal questions — before the randomized decoys multiply them further.
+Altogether that is **3,824 distinct question stems** — 682 "who said it", 120
+"who is it", 765 each way between verse and reference, 1,353 blanks, 108 doctrinal
+questions, and 31 prophet quotes — before the randomized decoys multiply them.
 
-Text is from the King James Bible and the Restoration scriptures, all public domain.
+Scripture text is from the King James Bible and the Restoration scriptures, all
+public domain. Prophet quotations are short excerpts cited to the page they appear
+on at churchofjesuschrist.org.
 
 ### Accuracy
 
@@ -84,14 +88,34 @@ Excerpts exist mostly to keep a card honest: `Ruth 1:16` opens "And Ruth said,"
 in the text, which would give away a "who said it" question, so the bank starts
 that verse at "Entreat me not to leave thee."
 
+Prophet quotes get the same treatment against a different source. Each one cites
+the page it appears on, and `tools/verify-quotes.js` fetches that page and checks
+the quote is really there:
+
+```bash
+node tools/verify-quotes.js            # all 31 must pass
+node tools/verify-quotes.js --refresh  # ignore the cache and re-download
+```
+
+If a quote is not on the page it cites, the tool searches that prophet's
+*Teachings of Presidents of the Church* volume and reports where it actually is,
+so the citation gets corrected instead of guessed at. That check is how the
+first draft of this bank lost nine quotes it could not substantiate and had four
+more corrected — President Oaks says "forego", not "forgo", and President Kimball
+asked "Are we prepared to lengthen our stride?", not "Lengthen your stride."
+
+This one is not a CI step, because it depends on a third-party site being up.
+`check-data.js` enforces the half that can be checked offline: **a quote without
+a source URL does not ship.**
+
 ### How often questions repeat
 
 Every stem you have been served is remembered in `localStorage` and is not shown
 again until the bank is spent, so the app works through it rather than re-rolling
 each session. At 20 questions a day that is roughly **six months** before the
 first repeat on the default setting. Narrowing the focus, the difficulty, or the
-set of question types narrows the pool — all six types at Master over the whole
-bank draws from 3,793 stems; an all-Alma run from 245.
+set of question types narrows the pool — all seven types at Master over the whole
+bank draws from 3,824 stems; an all-Alma run from 245.
 
 ### Adding verses
 
@@ -144,6 +168,10 @@ that answers it, difficulty, and `x`, the other references that would also fairl
 answer it. Everything in `x` is barred from appearing as a wrong choice, which is
 what keeps a question from having two right answers. Both `r` and every `x` must
 exist in the verse bank.
+
+`data/prophets.js` takes `{p, d, q, src, u}` — prophet, difficulty, the quote,
+a human-readable source, and the URL that proves it. Add the quote, then run
+`node tools/verify-quotes.js` and fix whatever it reports before committing.
 
 Then run both guards, which are also build steps:
 
