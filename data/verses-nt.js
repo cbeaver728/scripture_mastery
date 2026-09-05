@@ -260,5 +260,6 @@ window.VERSES_NT = [
 {r:"1 John 5:3",w:"nt",b:"1 John",s:"John the Beloved",d:2,t:"For this is the love of God, that we keep his commandments: and his commandments are not grievous.",f:["his commandments are not grievous"]},
 {r:"Revelation 1:8",w:"nt",b:"Revelation",s:"Jesus Christ",d:2,t:"I am Alpha and Omega, the beginning and the ending.",f:["I am Alpha and Omega"]},
 {r:"Revelation 7:14",w:"nt",b:"Revelation",d:2,t:"These are they which came out of great tribulation, and have washed their robes, and made them white in the blood of the Lamb.",f:["out of great tribulation","white in the blood of the Lamb"]},
-{r:"Revelation 22:12",w:"nt",b:"Revelation",s:"Jesus Christ",d:2,t:"And, behold, I come quickly; and my reward is with me, to give every man according as his work shall be.",f:["I come quickly","my reward is with me"]}
+{r:"Revelation 22:12",w:"nt",b:"Revelation",s:"Jesus Christ",d:2,t:"And, behold, I come quickly; and my reward is with me, to give every man according as his work shall be.",f:["I come quickly","my reward is with me"]},
+{r:"Romans 2:11",w:"nt",b:"Romans",s:"Paul",d:2,t:"For there is no respect of persons with God.",f:["no respect of persons with God"]}
 ];

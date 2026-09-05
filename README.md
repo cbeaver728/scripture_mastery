@@ -7,16 +7,20 @@ answer you believe is right.
 
 **Play it:** https://cbeaver728.github.io/scripture_mastery/
 
-## The four question types
+## The six question types
 
 | Type | The card shows | The three targets are |
 | --- | --- | --- |
 | **Who said it?** | A verse, with no reference | Three speakers |
+| **Who is it?** | A description of a scripture person | Three names |
 | **Verse → Reference** | A verse | Three references |
 | **Reference → Verse** | A reference | Three verse segments |
 | **Fill in the blank** | A verse with a word or phrase blanked out | Three phrases |
+| **Doctrine Q&A** | A doctrinal question | Three verses, one of which answers it |
 
-Any of them can be drilled on its own, or shuffled together in a mixed run.
+Pick any combination — all six, one on its own, or everything except the one you
+are tired of. The start screen shows how many distinct questions your current
+selection can produce.
 
 ## Options
 
@@ -28,8 +32,14 @@ Any of them can be drilled on its own, or shuffled together in a mixed run.
   question hard:
   - **Familiar** — best-known verses; decoys come from a different volume.
   - **Steady** — a wider range of verses; decoys come from the same volume.
-  - **Master** — the whole bank; decoys come from the same book, and often the
-    neighboring chapter. Telling Alma 37:6 from Alma 37:35 is the point.
+  - **Master** — the whole bank, and the decoys crowd in as close as they can get:
+    - references from the **same chapter** where one exists — across a sample of
+      150 Master questions, 95% of the three choices sat in one book and 27% in a
+      single chapter (one drew Matthew 5:5, 5:6 and 5:7);
+    - speakers that are genuinely easy to confuse — Alma the Elder against Alma
+      the Younger, Mormon against Moroni, Peter against Paul;
+    - blanks taken from the same chapter, matched on word count;
+    - and the volume is never named on the card, so it cannot narrow anything.
 
 A running score and streak sit at the top. Right answers get a green check and a
 soft two-note bell; wrong ones hold the card still, mark the right answer in green,
@@ -38,14 +48,19 @@ listed in full on the results screen.
 
 ## The verse bank
 
-763 verses, chosen for being doctrinally significant, famous, or worth carrying
-around: 191 Old Testament, 258 New Testament, 190 Book of Mormon, 88 Doctrine and
-Covenants, 36 Pearl of Great Price. 680 are attributed to one of 66 speakers, and
-1,350 phrases are marked as blankable.
+765 verses, chosen for being doctrinally significant, famous, or worth carrying
+around: 191 Old Testament, 259 New Testament, 190 Book of Mormon, 89 Doctrine and
+Covenants, 36 Pearl of Great Price. 682 are attributed to one of 66 speakers, and
+1,353 phrases are marked as blankable.
 
-That yields **3,556 distinct question stems** — 680 "who said it", 763 each way
-between verse and reference, and 1,350 blanks — before the randomized decoys
-multiply them further.
+Two banks sit alongside the verses: **89 people** with 120 descriptive clues in
+`data/people.js`, and **108 doctrinal questions** in `data/doctrine.js`, each
+pointing at the verse that answers it plus the other verses that would also
+fairly answer it (so they are never offered as wrong choices).
+
+Altogether that is **3,793 distinct question stems** — 682 "who said it", 120
+"who is it", 765 each way between verse and reference, 1,353 blanks, and 108
+doctrinal questions — before the randomized decoys multiply them further.
 
 Text is from the King James Bible and the Restoration scriptures, all public domain.
 
@@ -74,9 +89,9 @@ that verse at "Entreat me not to leave thee."
 Every stem you have been served is remembered in `localStorage` and is not shown
 again until the bank is spent, so the app works through it rather than re-rolling
 each session. At 20 questions a day that is roughly **six months** before the
-first repeat on the default setting. Narrowing the focus or difficulty narrows the
-pool — a Master-difficulty run over all the standard works draws from 3,556 stems,
-an all-Alma run from 245.
+first repeat on the default setting. Narrowing the focus, the difficulty, or the
+set of question types narrows the pool — all six types at Master over the whole
+bank draws from 3,793 stems; an all-Alma run from 245.
 
 ### Adding verses
 
@@ -116,6 +131,19 @@ Each entry ends up in the right file in `data/` looking like this:
 | `d` | Difficulty 1–3 (1 = famous) |
 | `t` | Verse text |
 | `f` | Phrases that can be blanked — each **must** appear verbatim in `t` |
+
+### Adding people and doctrinal questions
+
+`data/people.js` takes `{n, w, b, d, c}` — name, volume, home book, difficulty,
+and an array of clues. Each clue becomes its own question, so give the well-known
+figures two or three. A clue must never name its own subject (the guard checks),
+and `g:"f"` marks a woman so the choices stay consistent with the clue's pronouns.
+
+`data/doctrine.js` takes `{q, r, d, x}` — the question, the reference of the verse
+that answers it, difficulty, and `x`, the other references that would also fairly
+answer it. Everything in `x` is barred from appearing as a wrong choice, which is
+what keeps a question from having two right answers. Both `r` and every `x` must
+exist in the verse bank.
 
 Then run both guards, which are also build steps:
 

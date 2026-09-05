@@ -4,12 +4,14 @@
 const path = require('path');
 
 global.window = {};
-['verses-ot.js', 'verses-nt.js', 'verses-bom.js', 'verses-dc-pgp.js']
+['verses-ot.js', 'verses-nt.js', 'verses-bom.js', 'verses-dc-pgp.js', 'people.js', 'doctrine.js']
   .forEach((f) => require(path.join(__dirname, '..', 'data', f)));
 
 const all = [].concat(
   window.VERSES_OT, window.VERSES_NT, window.VERSES_BOM, window.VERSES_DC_PGP
 );
+const people = window.PEOPLE;
+const doctrine = window.DOCTRINE;
 
 const problems = [];
 const refs = new Set();
@@ -38,12 +40,46 @@ all.forEach((v) => {
   else byText.set(k, v.r);
 });
 
+/* ---- "Who is it?" bank ---- */
+const names = new Set();
+people.forEach((p) => {
+  if (!p.n || !p.w || !p.b) problems.push(`${p.n || '(unnamed)'}: missing a field`);
+  if (names.has(p.n)) problems.push(`${p.n}: duplicate person`);
+  names.add(p.n);
+  if (![1, 2, 3].includes(p.d)) problems.push(`${p.n}: difficulty must be 1-3`);
+  if (!p.c || !p.c.length) problems.push(`${p.n}: no clues`);
+  /* A clue that names its own subject gives the answer away. */
+  (p.c || []).forEach((clue) => {
+    const bare = p.n.replace(/^(The|King|Captain) /, '').split(/ (of|the) /)[0];
+    if (bare.length > 3 && new RegExp(`\\b${bare}\\b`, 'i').test(clue)) {
+      problems.push(`${p.n}: clue names the person — "${clue.slice(0, 50)}…"`);
+    }
+  });
+});
+
+/* ---- doctrinal bank ---- */
+const byRef = new Map(all.map((v) => [v.r, v]));
+const asked = new Set();
+doctrine.forEach((q) => {
+  if (!q.q || !q.r) { problems.push('doctrine entry missing q or r'); return; }
+  if (asked.has(q.q)) problems.push(`duplicate doctrinal question: ${q.q}`);
+  asked.add(q.q);
+  if (![1, 2, 3].includes(q.d)) problems.push(`${q.q}: difficulty must be 1-3`);
+  if (!byRef.has(q.r)) problems.push(`${q.q}: answer ${q.r} is not in the verse bank`);
+  (q.x || []).forEach((r) => {
+    if (!byRef.has(r)) problems.push(`${q.q}: excluded ${r} is not in the verse bank`);
+    if (r === q.r) problems.push(`${q.q}: excludes its own answer`);
+  });
+});
+
 const byWork = {};
 all.forEach((v) => { byWork[v.w] = (byWork[v.w] || 0) + 1; });
 
 console.log(`${all.length} verses — ${JSON.stringify(byWork)}`);
 console.log(`${all.filter((v) => v.s).length} attributed, ${speakers.size} distinct speakers`);
 console.log(`${all.reduce((n, v) => n + (v.f || []).length, 0)} fill-in-the-blank phrases`);
+console.log(`${people.length} people, ${people.reduce((n, p) => n + p.c.length, 0)} clues`);
+console.log(`${doctrine.length} doctrinal questions`);
 
 if (problems.length) {
   console.error(`\n${problems.length} problem(s):`);

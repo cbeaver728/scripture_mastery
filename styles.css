@@ -66,7 +66,21 @@ body{
   margin:0 0 10px;font-size:12px;font-weight:700;letter-spacing:1.4px;
   text-transform:uppercase;color:var(--ink-dim);
 }
+.opt-hint{
+  float:right;font-size:10.5px;font-weight:600;letter-spacing:.6px;
+  color:#6d739c;text-transform:none;
+}
 .chips{display:flex;flex-wrap:wrap;gap:8px}
+/* Multi-select chips read as included/excluded rather than one-of-many. */
+.chip[role="checkbox"][aria-checked="true"]::before{content:"✓ ";font-weight:700}
+.chip-all{
+  background:transparent;border-style:dashed;color:var(--ink-dim);
+  font-size:13.5px;padding:10px 13px;
+}
+.chip-all[aria-checked="true"]{
+  background:transparent;border-style:dashed;border-color:var(--gold-deep);
+  color:var(--gold);font-weight:600;
+}
 .chip{
   font:inherit;font-size:14.5px;color:var(--ink);
   background:rgba(255,255,255,.06);border:1.5px solid rgba(255,255,255,.1);

@@ -15,11 +15,37 @@ var WORK_NAME = {
   dc: 'Doctrine and Covenants', pgp: 'Pearl of Great Price'
 };
 
-var TYPE_LABEL = {
-  who: 'Who said it?',
-  text2ref: 'Which reference is this?',
-  ref2text: 'Which verse is this?',
-  blank: 'Fill in the blank'
+var PEOPLE = window.PEOPLE || [];
+var DOCTRINE = window.DOCTRINE || [];
+
+var ALL_TYPES = ['who', 'whois', 'text2ref', 'ref2text', 'blank', 'doctrine'];
+
+/* Speakers that are genuinely easy to mix up. At Master these are preferred as
+   wrong answers, because "Alma the Elder or the Younger?" is the real question. */
+var CONFUSABLE = {
+  'Alma the Younger': ['Alma the Elder', 'Amulek', 'Ammon', 'Helaman'],
+  'Alma the Elder': ['Alma the Younger', 'Abinadi', 'King Benjamin'],
+  'Amulek': ['Alma the Younger', 'Ammon', 'Aaron'],
+  'Ammon': ['Aaron', 'Amulek', 'Alma the Younger'],
+  'Mormon': ['Moroni', 'Helaman', 'Nephi'],
+  'Moroni': ['Mormon', 'Captain Moroni', 'Ether'],
+  'Captain Moroni': ['Moroni', 'Helaman', 'Teancum'],
+  'Helaman': ['Captain Moroni', 'Mormon', 'Alma the Younger'],
+  'Nephi': ['Lehi', 'Jacob', 'Mormon'],
+  'Lehi': ['Nephi', 'Jacob'],
+  'Jacob': ['Nephi', 'Lehi', 'Enos'],
+  'Enos': ['Jacob', 'Amaleki', 'Nephi'],
+  'Peter': ['Paul', 'James', 'John the Beloved'],
+  'Paul': ['Peter', 'James', 'John the Beloved'],
+  'James': ['Paul', 'Peter', 'John the Beloved'],
+  'John the Beloved': ['Peter', 'Paul', 'James'],
+  'Jehovah': ['Jesus Christ', 'God the Father'],
+  'Jesus Christ': ['Jehovah', 'God the Father'],
+  'Moses': ['Joshua', 'Jehovah', 'Aaron of old'],
+  'Isaiah': ['Jeremiah', 'Micah', 'Malachi'],
+  'Joseph Smith': ['John Taylor', 'Joseph F. Smith', 'Jesus Christ'],
+  'Samuel': ['David', 'Samuel the Lamanite'],
+  'Samuel the Lamanite': ['Samuel', 'Abinadi', 'Nephi']
 };
 
 /* ------------------------- indexes / helpers ------------------------- */
@@ -33,7 +59,9 @@ VERSES.forEach(function (v) {
 
 var PHRASES = [];
 VERSES.forEach(function (v) {
-  v.f.forEach(function (p) { PHRASES.push({ p: p, w: v.w, b: v.b, r: v.r }); });
+  v.f.forEach(function (p) {
+    PHRASES.push({ p: p, w: v.w, b: v.b, r: v.r, ch: v._ch });
+  });
 });
 
 function words(s) { return s.trim().split(/\s+/).length; }
@@ -129,7 +157,7 @@ function buildFocusMenu() {
 
 /* ============================== state ============================== */
 var prefs = {
-  type: 'mixed', len: 10, focus: 'all', diff: 2, sound: true, haptic: true
+  types: ALL_TYPES.slice(), len: 10, focus: 'all', diff: 2, sound: true, haptic: true
 };
 var stats = { answered: 0, correct: 0, best: 0 };
 
@@ -147,6 +175,12 @@ function load() {
   try {
     var p = JSON.parse(localStorage.getItem('sm.prefs') || 'null');
     if (p) for (var k in p) if (k in prefs) prefs[k] = p[k];
+    /* Older builds stored a single type; carry it forward. */
+    if (p && typeof p.type === 'string') {
+      prefs.types = p.type === 'mixed' ? ALL_TYPES.slice() : [p.type];
+    }
+    prefs.types = (prefs.types || []).filter(function (t) { return ALL_TYPES.indexOf(t) >= 0; });
+    if (!prefs.types.length) prefs.types = ALL_TYPES.slice();
     var s = JSON.parse(localStorage.getItem('sm.stats') || 'null');
     if (s) for (var j in s) if (j in stats) stats[j] = s[j];
     var k = localStorage.getItem('sm.seen');
@@ -228,12 +262,67 @@ function poolFor(focus, diff) {
   return base.length ? base : VERSES.slice();
 }
 
+/* People and doctrinal questions are filtered by the same focus and difficulty.
+   A person matches a focus by their volume and home book; a doctrinal question
+   matches by the verse that answers it. */
+var BY_REF = {};
+VERSES.forEach(function (v) { BY_REF[v.r] = v; });
+
+function contextFor(focus, diff) {
+  var test = focusTest(focus);
+  var people = PEOPLE.filter(function (p) { return p.d <= diff && test(p); });
+  if (people.length < 3) people = PEOPLE.filter(function (p) { return p.d <= diff; });
+  if (people.length < 3) people = PEOPLE.slice();
+
+  var doctrine = DOCTRINE.filter(function (q) {
+    var v = BY_REF[q.r];
+    return v && q.d <= diff && test(v);
+  });
+  if (!doctrine.length) {
+    doctrine = DOCTRINE.filter(function (q) { return BY_REF[q.r] && q.d <= diff; });
+  }
+  if (!doctrine.length) doctrine = DOCTRINE.filter(function (q) { return BY_REF[q.r]; });
+
+  return { people: people, doctrine: doctrine, byRef: BY_REF };
+}
+function widestContext() {
+  return { people: PEOPLE, doctrine: DOCTRINE.filter(function (q) { return BY_REF[q.r]; }), byRef: BY_REF };
+}
+
+/* How many distinct questions the current settings can produce. */
+function availableStems(types, focus, diff) {
+  var pool = poolFor(focus, diff);
+  var ctx = contextFor(focus, diff);
+  var n = 0;
+  types.forEach(function (t) {
+    if (t === 'who') n += pool.filter(function (v) { return v.s; }).length;
+    else if (t === 'text2ref' || t === 'ref2text') n += pool.length;
+    else if (t === 'blank') n += pool.reduce(function (a, v) { return a + v.f.length; }, 0);
+    else if (t === 'whois') n += ctx.people.reduce(function (a, p) { return a + p.c.length; }, 0);
+    else if (t === 'doctrine') n += ctx.doctrine.length;
+  });
+  return n;
+}
+
 /* Distractors get closer to the answer as difficulty rises. */
 function nearness(diff) { return diff >= 3 ? 'tight' : diff === 2 ? 'mid' : 'wide'; }
 
+/* How far apart two references sit. Same chapter beats same book by a mile:
+   telling Alma 32:21 from Alma 32:27 is a different skill from telling Alma
+   from Isaiah, and it is the one worth drilling. */
+function refDistance(a, b) {
+  if (a.b !== b.b) return 100000;
+  return Math.abs(a._ch - b._ch) * 1000 + Math.abs(a._vs - b._vs);
+}
+function nearest(list, v, n) {
+  return list.slice()
+    .sort(function (x, y) { return refDistance(x, v) - refDistance(y, v); })
+    .slice(0, n);
+}
+
 function pickDistractors(candidates, n, near) {
   var list = candidates.slice();
-  if (near === 'tight') list = list.slice(0, Math.max(n, Math.ceil(list.length * 0.5)));
+  if (near === 'tight') list = list.slice(0, Math.max(n, 4));   // only the closest few
   shuffle(list);
   return list.slice(0, n);
 }
@@ -251,7 +340,12 @@ function qWho(pool, diff, all) {
 
   /* Widen on the count of distinct *names* — a book can hold many verses
      but only one other speaker, which is not enough to build a question. */
-  var ladder = near === 'tight' ? [sameBook, sameWork, others]
+  /* At Master, reach first for the names that are actually easy to confuse. */
+  var confusing = [];
+  if (near === 'tight' && CONFUSABLE[v.s]) {
+    confusing = others.filter(function (x) { return CONFUSABLE[v.s].indexOf(x.s) >= 0; });
+  }
+  var ladder = near === 'tight' ? [confusing, sameBook, sameWork, others]
              : near === 'mid' ? [sameWork, others]
              : [otherWork, others];
   var names = [];
@@ -284,9 +378,10 @@ function qText2Ref(pool, diff, all) {
   var others = all.filter(function (x) { return x.r !== v.r; });
   var tier;
   if (near === 'tight') {
-    tier = others.filter(function (x) { return x.b === v.b; });
-    tier.sort(function (a, b) { return Math.abs(a._ch - v._ch) - Math.abs(b._ch - v._ch); });
-    if (tier.length < 2) tier = others.filter(function (x) { return x.w === v.w; });
+    /* Nearest references in the same book — same chapter first. */
+    var book = others.filter(function (x) { return x.b === v.b; });
+    tier = book.length >= 2 ? nearest(book, v, 6)
+         : others.filter(function (x) { return x.w === v.w; });
   } else if (near === 'mid') {
     tier = others.filter(function (x) { return x.w === v.w; });
   } else {
@@ -317,8 +412,9 @@ function qRef2Text(pool, diff, all) {
   var others = all.filter(function (x) { return x.r !== v.r && snippet(x) !== mine; });
   var tier;
   if (near === 'tight') {
-    tier = others.filter(function (x) { return x.b === v.b; });
-    if (tier.length < 2) tier = others.filter(function (x) { return x.w === v.w; });
+    var book = others.filter(function (x) { return x.b === v.b; });
+    tier = book.length >= 2 ? nearest(book, v, 6)
+         : others.filter(function (x) { return x.w === v.w; });
   } else if (near === 'mid') {
     tier = others.filter(function (x) { return x.w === v.w; });
   } else {
@@ -338,7 +434,8 @@ function qRef2Text(pool, diff, all) {
     type: 'ref2text',
     verse: v,
     prompt: 'Which verse is this?',
-    kicker: WORK_NAME[v.w],
+    /* Naming the volume is a hint, so Master does without it. */
+    kicker: near === 'tight' ? '' : WORK_NAME[v.w],
     main: esc(v.r),
     size: 'size-xl',
     correct: mine,
@@ -361,7 +458,8 @@ function qBlank(pool, diff, all) {
     return list.filter(function (x) { return Math.abs(words(x.p) - n) <= span; });
   }
   var ladder = near === 'tight'
-    ? [band(usable.filter(function (x) { return x.b === v.b; }), 2),
+    ? [band(usable.filter(function (x) { return x.b === v.b && x.ch === v._ch; }), 1),
+       band(usable.filter(function (x) { return x.b === v.b; }), 1),
        band(usable.filter(function (x) { return x.w === v.w; }), 1),
        band(usable, 1), usable]
     : near === 'mid'
@@ -400,6 +498,106 @@ function qBlank(pool, diff, all) {
   };
 }
 
+/* ---- Who is it? A description of a person; three names. ---- */
+function qWhoIs(pool, diff, all, ctx) {
+  var cands = ctx.people;
+  if (!cands || cands.length < 1) return null;
+  var p = sample(cands);
+  var clueIndex = Math.floor(Math.random() * p.c.length);
+  var clue = p.c[clueIndex];
+  var near = nearness(diff);
+
+  /* Clues say "he" or "she", so a mismatched name is a free elimination. And a
+     clue that mentions someone else by name ("to whom Abraham paid tithes")
+     must not then offer that name as a choice. */
+  var others = PEOPLE.filter(function (x) {
+    return x.n !== p.n && (x.g || 'm') === (p.g || 'm') && clue.indexOf(x.n) < 0;
+  });
+  if (others.length < 2) {
+    others = PEOPLE.filter(function (x) {
+      return x.n !== p.n && clue.indexOf(x.n) < 0;
+    });
+  }
+
+  var sameBook = others.filter(function (x) { return x.b === p.b; });
+  var sameWork = others.filter(function (x) { return x.w === p.w; });
+  var otherWork = others.filter(function (x) { return x.w !== p.w; });
+  var ladder = near === 'tight' ? [sameBook, sameWork, others]
+             : near === 'mid' ? [sameWork, others]
+             : [otherWork, others];
+
+  var picks = [];
+  for (var i = 0; i < ladder.length; i++) {
+    if (ladder[i].length >= 2) { picks = shuffle(ladder[i].slice()).slice(0, 2); break; }
+  }
+  if (picks.length < 2) return null;
+
+  return {
+    key: 'who?|' + p.n + '|' + clueIndex,
+    type: 'whois',
+    verse: { r: p.n, t: clue, b: p.b, w: p.w },   // stands in for a verse in the miss list
+    prompt: 'Who is it?',
+    /* The volume is a leg-up, so only the easiest level gets it. */
+    kicker: near === 'wide' ? WORK_NAME[p.w] : '',
+    main: esc(clue),
+    size: sizeFor(clue),
+    correct: p.n,
+    options: [p.n, picks[0].n, picks[1].n],
+    reveal: ''
+  };
+}
+
+/* ---- Doctrine Q&A: a question; three verses, one of which answers it. ---- */
+function qDoctrine(pool, diff, all, ctx) {
+  var cands = ctx.doctrine;
+  if (!cands || cands.length < 1) return null;
+  var q = sample(cands);
+  var v = ctx.byRef[q.r];
+  if (!v) return null;
+  var near = nearness(diff);
+
+  var mine = snippet(v);
+  var banned = {};
+  (q.x || []).forEach(function (r) { banned[r] = 1; });
+  banned[q.r] = 1;
+
+  var others = all.filter(function (x) {
+    return !banned[x.r] && snippet(x) !== mine;
+  });
+  var tier;
+  if (near === 'tight') {
+    /* Wrong answers from the same book as the right one, so the volume and the
+       subject matter cannot be used to shortcut the doctrine. */
+    var book = others.filter(function (x) { return x.b === v.b; });
+    tier = book.length >= 2 ? book : others.filter(function (x) { return x.w === v.w; });
+  } else if (near === 'mid') {
+    tier = others.filter(function (x) { return x.w === v.w; });
+  } else {
+    tier = others.filter(function (x) { return x.w !== v.w; });
+  }
+  if (tier.length < 2) tier = others;
+
+  var picks = [], texts = [mine];
+  shuffle(tier.slice()).forEach(function (x) {
+    var s = snippet(x);
+    if (picks.length < 2 && texts.indexOf(s) < 0) { texts.push(s); picks.push(x); }
+  });
+  if (picks.length < 2) return null;
+
+  return {
+    key: 'doct|' + q.q,
+    type: 'doctrine',
+    verse: v,
+    prompt: 'Which verse answers this?',
+    kicker: '',
+    main: esc(q.q),
+    size: q.q.length < 46 ? 'size-xl' : 'size-lg',
+    correct: mine,
+    options: [mine, snippet(picks[0]), snippet(picks[1])],
+    reveal: ''
+  };
+}
+
 function sizeFor(t) {
   var n = t.length;
   if (n < 62) return 'size-xl';
@@ -409,14 +607,17 @@ function sizeFor(t) {
   return 'size-xs';
 }
 
-var BUILDERS = { who: qWho, text2ref: qText2Ref, ref2text: qRef2Text, blank: qBlank };
+var BUILDERS = {
+  who: qWho, whois: qWhoIs, text2ref: qText2Ref,
+  ref2text: qRef2Text, blank: qBlank, doctrine: qDoctrine
+};
 
 function nextQuestion() {
-  var pool = game.pool, all = game.all, diff = prefs.diff;
+  var pool = game.pool, all = game.all, diff = prefs.diff, ctx = game.ctx;
   var types = game.types.slice();
   for (var attempt = 0; attempt < 40; attempt++) {
     var type = sample(types);
-    var built = BUILDERS[type](pool, diff, all);
+    var built = BUILDERS[type](pool, diff, all, ctx);
     if (!built) continue;
     if (built.verse.r === game.lastRef && attempt < 12) continue;
     if (seen[built.key]) continue;
@@ -428,18 +629,19 @@ function nextQuestion() {
   seen = {}; saveSeen();                           // bank spent — start a new pass
   for (var pass = 0; pass < 6; pass++) {
     for (var i = 0; i < types.length; i++) {
-      var b = BUILDERS[types[i]](pool, diff, all);
+      var b = BUILDERS[types[i]](pool, diff, all, ctx);
       if (b) return b;
     }
   }
-  /* Still nothing: keep the question type the player chose and widen the pool. */
+  /* Still nothing: keep the question types the player chose and widen the pool. */
+  var wide = widestContext();
   for (var j = 0; j < types.length; j++) {
     for (var k = 0; k < 8; k++) {
-      var w = BUILDERS[types[j]](VERSES, diff, VERSES);
+      var w = BUILDERS[types[j]](VERSES, diff, VERSES, wide);
       if (w) return w;
     }
   }
-  return qText2Ref(VERSES, diff, VERSES);
+  return qText2Ref(VERSES, diff, VERSES, wide);
 }
 
 /* ============================== DOM ============================== */
@@ -454,7 +656,7 @@ function show(id) {
 
 /* --------------------------- start screen --------------------------- */
 function paintChips() {
-  setChips('#opt-type', prefs.type);
+  paintTypes();
   setChips('#opt-len', String(prefs.len));
   setChips('#opt-diff', String(prefs.diff));
   $('#opt-focus').value = prefs.focus;
@@ -467,15 +669,31 @@ function setChips(sel, val) {
     c.setAttribute('aria-checked', String(c.dataset.v === val));
   });
 }
+function paintTypes() {
+  $$('#opt-type .chip').forEach(function (c) {
+    if (c.dataset.v === 'all') return;
+    c.setAttribute('aria-checked', String(prefs.types.indexOf(c.dataset.v) >= 0));
+  });
+  $('#chip-all').setAttribute('aria-checked',
+    String(prefs.types.length === ALL_TYPES.length));
+}
 function paintNotes() {
   var pool = poolFor(prefs.focus, prefs.diff);
   var label = focusLabel(prefs.focus);
   $('#focus-note').textContent = pool.length + ' verses in play from ' + label + '.';
   $('#diff-note').textContent = prefs.diff === 1
-    ? 'Best-known verses, with clearly different choices.'
+    ? 'Best-known verses, and the wrong answers come from a different volume.'
     : prefs.diff === 2
-      ? 'A wider range of verses; wrong answers come from the same volume.'
-      : 'Every verse in the bank, and the wrong answers come from the same book.';
+      ? 'A wider range; wrong answers come from the same volume.'
+      : 'Everything in the bank. Wrong answers come from the same chapter where '
+        + 'one exists, speakers who are easy to confuse, and no volume is named.';
+
+  var n = availableStems(prefs.types, prefs.focus, prefs.diff);
+  var count = prefs.types.length;
+  $('#type-note').textContent = count === 0
+    ? 'Pick at least one type.'
+    : count + (count === 1 ? ' type · ' : ' types · ')
+      + n.toLocaleString() + ' question' + (n === 1 ? '' : 's') + ' available.';
 }
 function paintLifetime() {
   if (!stats.answered) return;
@@ -486,24 +704,34 @@ function paintLifetime() {
 }
 
 /* ============================== quiz ============================== */
+function canSupply(t, pool, ctx) {
+  if (t === 'who') return pool.some(function (v) { return !!v.s; });
+  if (t === 'blank') return pool.some(function (v) { return v.f.length > 0; });
+  if (t === 'whois') return ctx.people.length >= 3;
+  if (t === 'doctrine') return ctx.doctrine.length >= 1;
+  return pool.length >= 1;
+}
+
 function startQuiz() {
   var all = VERSES;
   var pool = poolFor(prefs.focus, prefs.diff);
-  var types = prefs.type === 'mixed'
-    ? ['who', 'text2ref', 'ref2text', 'blank']
-    : [prefs.type];
+  var ctx = contextFor(prefs.focus, prefs.diff);
+  var types = prefs.types.slice();
+  if (!types.length) types = ALL_TYPES.slice();
 
-  /* A single-type quiz needs verses that support that type. */
-  if (types.length === 1) {
-    var supports = types[0] === 'who' ? function (v) { return !!v.s; }
-                 : types[0] === 'blank' ? function (v) { return v.f.length > 0; }
-                 : function () { return true; };
-    var ok = pool.filter(supports);
-    pool = ok.length ? ok : VERSES.filter(supports);
+  /* Drop the chosen types this focus cannot actually produce — a "who said it"
+     run over Psalms has nothing to ask. If that empties the list, widen instead
+     of serving nothing. */
+  var usable = types.filter(function (t) { return canSupply(t, pool, ctx); });
+  if (usable.length) {
+    types = usable;
+  } else {
+    pool = VERSES.slice();
+    ctx = widestContext();
   }
 
   game = {
-    pool: pool, all: all, types: types,
+    pool: pool, all: all, types: types, ctx: ctx,
     total: prefs.len, n: 0, correct: 0, streak: 0, best: 0,
     lastRef: null, missed: []
   };
@@ -776,11 +1004,20 @@ function init() {
   if (!$('#opt-focus').querySelector('option[value="' + prefs.focus + '"]')) prefs.focus = 'all';
   paintChips();
   paintLifetime();
-  $('#bank-count').textContent = VERSES.length + ' verses in the bank.';
 
   $('#opt-type').addEventListener('click', function (e) {
     var c = e.target.closest('.chip'); if (!c) return;
-    prefs.type = c.dataset.v; setChips('#opt-type', prefs.type); savePrefs();
+    var v = c.dataset.v;
+    if (v === 'all') {
+      prefs.types = prefs.types.length === ALL_TYPES.length ? ALL_TYPES.slice(0, 1)
+                                                            : ALL_TYPES.slice();
+    } else {
+      var i = prefs.types.indexOf(v);
+      if (i < 0) prefs.types.push(v);
+      else if (prefs.types.length > 1) prefs.types.splice(i, 1);   // keep at least one
+    }
+    prefs.types = ALL_TYPES.filter(function (t) { return prefs.types.indexOf(t) >= 0; });
+    paintTypes(); paintNotes(); savePrefs();
   });
   $('#opt-len').addEventListener('click', function (e) {
     var c = e.target.closest('.chip'); if (!c) return;
@@ -793,6 +1030,9 @@ function init() {
   $('#opt-focus').addEventListener('change', function (e) {
     prefs.focus = e.target.value; paintNotes(); savePrefs();
   });
+  $('#bank-count').textContent =
+    VERSES.length + ' verses, ' + PEOPLE.length + ' people, '
+    + DOCTRINE.length + ' doctrinal questions.';
   $('#opt-sound').addEventListener('change', function (e) { prefs.sound = e.target.checked; savePrefs(); });
   $('#opt-haptic').addEventListener('change', function (e) { prefs.haptic = e.target.checked; savePrefs(); });
 
