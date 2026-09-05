@@ -16,7 +16,7 @@ answer you believe is right.
 | **Verse → Reference** | A verse | Three references |
 | **Reference → Verse** | A reference | Three verse segments |
 | **Fill in the blank** | A verse with a word or phrase blanked out | Three phrases |
-| **Doctrine Q&A** | A doctrinal question | Three verses, one of which answers it |
+| **Doctrine Q&A** | A doctrinal question | Three references, one of which answers it |
 | **Modern prophets** | A quote from a President of the Church | Three Presidents |
 
 Pick any combination — all seven, one on its own, or everything except the one you

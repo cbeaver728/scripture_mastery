@@ -570,14 +570,14 @@ function qDoctrine(pool, diff, all, ctx) {
   if (!v) return null;
   var near = nearness(diff);
 
-  var mine = snippet(v);
+  /* The choices are references, so the player has to know where the answer
+     lives, not just recognise the wording of it. */
+  var mine = v.r;
   var banned = {};
   (q.x || []).forEach(function (r) { banned[r] = 1; });
   banned[q.r] = 1;
 
-  var others = all.filter(function (x) {
-    return !banned[x.r] && snippet(x) !== mine;
-  });
+  var others = all.filter(function (x) { return !banned[x.r]; });
   var tier;
   if (near === 'tight') {
     /* Wrong answers from the same book as the right one, so the volume and the
@@ -591,24 +591,23 @@ function qDoctrine(pool, diff, all, ctx) {
   }
   if (tier.length < 2) tier = others;
 
-  var picks = [], texts = [mine];
-  shuffle(tier.slice()).forEach(function (x) {
-    var s = snippet(x);
-    if (picks.length < 2 && texts.indexOf(s) < 0) { texts.push(s); picks.push(x); }
-  });
+  var picks = shuffle(tier.slice()).slice(0, 2);
   if (picks.length < 2) return null;
+
+  /* The answer's wording is never on the card, so show it on a miss. */
+  var body = v.t.length > 190 ? v.t.slice(0, 185).replace(/\s+\S*$/, '') + '…' : v.t;
 
   return {
     key: 'doct|' + q.q,
     type: 'doctrine',
     verse: v,
-    prompt: 'Which verse answers this?',
+    prompt: 'Which reference answers this?',
     kicker: '',
     main: esc(q.q),
     size: q.q.length < 46 ? 'size-xl' : 'size-lg',
     correct: mine,
-    options: [mine, snippet(picks[0]), snippet(picks[1])],
-    reveal: ''
+    options: [mine, picks[0].r, picks[1].r],
+    reveal: '<span class="ref">' + esc(body) + '</span>'
   };
 }
 
